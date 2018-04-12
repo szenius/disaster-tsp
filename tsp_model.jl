@@ -44,26 +44,17 @@ speed2 = 1/(1/3600) # speed of combing a unit square while rescuing at a node (s
 # model
 m = Model(solver=GurobiSolver())
 
-println("input variables...")
 @variable(m, tlapsed[k=1:N] >= 0) # tlapsed[i] is the total time lapsed when team reaches node i
 @variable(m, x[f=1:N,t=1:N], Bin) # x[i][j] is the arc from node i to node j
-println("done input variables.")
 
-println("input objective...")
 @objective(m, Min, sum(death[i]*tlapsed[i] for i=1:N))
-println("done input objective.")
 
-
-println("input constraints outside loop...")
 @constraint(m, notself[i=1:N], x[f=i,t=i] == 0) # cannot go from node i to node i
 @constraint(m, oneout[i=1:N], sum(x[f=i,t=1:N]) == 1) # from node i, can only go to 1 other node
 @constraint(m, onein[j=1:N], sum(x[f=1:N,t=j]) == 1) # only 1 other node coming to node j
 @constraint(m, tlapsed[1] == 0) # time lapsed at node 1 (start) is 0
-println("done input constraints outside loop.")
 
-println("input constraints in monstrous loop...")
 for f=1:N
-    println("input constraint in loop [", f, "]", "[x]...")
     for t=2:N
         @constraint(m, x[f,t]+x[t,f] <= 1) # disallow i --> j --> i loops
 
@@ -72,8 +63,6 @@ for f=1:N
         @constraint(m, tlapsed[t] - tlapsed[f] <= (cost[f]*speed2+euclidean(c_pos[t],c_pos[f])*speed)*x[f,t] + M*(1-x[f,t]))
     end
 end
-
-println("done input constraints in monstrous loop")
 
 # solve
 tic()
