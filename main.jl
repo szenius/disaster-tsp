@@ -58,7 +58,7 @@ end
 # plot tour
 ##############################
 function plot_tour(x, c_pos)
-    x_final = convert(Array{Int64}, getvalue(x))
+    x_final = getvalue(x)
     cycle_idx = Array{Int}(0)
     push!(cycle_idx, 1)
     while true
