@@ -3,6 +3,8 @@ using JuMP, Gurobi, Distances, Plots
 debug = true
 debug_N = 10
 
+new_info_prob = 1.0
+
 function generate_tsp(N, c_pos, death, cost)
     # Solve initial assignment problem
     (m, x, tlapsed) = solve_assignment(N, c_pos, death, cost)
@@ -10,27 +12,27 @@ function generate_tsp(N, c_pos, death, cost)
     for i=1:N
         println(i, " : ", getvalue(tlapsed[i])*death[i], " [", getvalue(tlapsed[i]), "]")
     end
-    plot_tour(x, c_pos)
+    plot_tour(x, c_pos, N)
 
     # Subtour elimination
     tic()
     count = 0
-    (isDone, m) = subtour_elimination(m, x)
+    (isDone, m) = subtour_elimination(m, x, N)
     while !isDone
         status = solve(m)
         count += 1
         println("cut number: ", count)
-        (isDone, m) = subtour_elimination(m, x)
+        (isDone, m) = subtour_elimination(m, x, N)
     end
     toc()
     println("Objective value:", getobjectivevalue(m))
-    plot_tour(x, c_pos)
+    return plot_tour(x, c_pos, N)
 end
 
 ##############################
 # eliminate subtours
 ##############################
-function subtour_elimination(m, x)
+function subtour_elimination(m, x, N)
     x_val = getvalue(x)    #initial solution
 
     # find cycle
@@ -57,17 +59,17 @@ end
 ##############################
 # plot tour
 ##############################
-function plot_tour(x, c_pos)
+function plot_tour(x, c_pos, N)
     x_final = getvalue(x)
     cycle_idx = Array{Int}(0)
     push!(cycle_idx, 1)
     while true
-            v, idx = findmax(x_final[f=cycle_idx[end],t=1:N])
-            if idx == cycle_idx[1]
-                break
-            else
-                push!(cycle_idx,idx)
-            end
+        v, idx = findmax(x_final[f=cycle_idx[end],t=1:N])
+        if idx == cycle_idx[1]
+            break
+        else
+            push!(cycle_idx,idx)
+        end
     end
     a = [c_pos[i][1] for i in cycle_idx]
     b = [c_pos[i][2] for i in cycle_idx]
@@ -78,6 +80,8 @@ function plot_tour(x, c_pos)
 
     plot!(a,b, marker=([:hex :d],6,0.4,stroke(2,:gray)), legend = false)
     gui()
+
+    return cycle_idx
 end
 
 
@@ -154,10 +158,72 @@ function read_and_parse_data(filename)
     return N, c_pos, death, cost
 end
 
+##################
+# HELPER FUNCTIONS
+#################
+
+# Multiplier to get new death for new information
+function get_death_multiplier()
+    return rand(2:5)
+end
+
+# Returns a random number between start_idx and end_idx
+function rand_between(start_idx, end_idx)
+    return rand(start_idx:end_idx)
+end
+
+# Generate new input for new TSP problem
+function generate_new_input(curr_node, change_node_idx, N, cycle_idx, c_pos, death, cost)
+    new_N = length(cycle_idx) - curr_node
+    new_c_pos = [Vector{Float64}(2) for _ in 1:new_N]
+    new_death = Array{Float64}(new_N)
+    new_cost = Array{Float64}(new_N)
+    new_idx = 1
+    for j=curr_node+1:N
+        new_c_pos[new_idx][1] = c_pos[cycle_idx[j]][1]
+        new_c_pos[new_idx][2] = c_pos[cycle_idx[j]][2]
+        new_death[new_idx] = death[cycle_idx[j]]
+        # change death rate of chosen node by random percentage
+        if j == change_node_idx
+            new_death[new_idx] *= get_death_multiplier()
+        end
+        new_cost[new_idx] = cost[cycle_idx[j]]
+        new_idx += 1
+    end
+    return (new_N, new_c_pos, new_death, new_cost)
+end
+
 plotly()
 
 # Read data file
 (N, c_pos, death, cost) = read_and_parse_data("C:/Users/SZEYING/LocationFinal2.txt")
 println("Read in data file. There are ", N, " nodes.")
 
-generate_tsp(N, c_pos, death, cost)
+# Generate first TSP based on input data
+cycle_idx = generate_tsp(N, c_pos, death, cost)
+
+# Traverse the TSP cycle
+curr_node = 1
+while curr_node != length(cycle_idx)
+    println("Reached node ", cycle_idx[curr_node])
+    gen_prob = rand()
+    if (gen_prob < new_info_prob && length(cycle_idx) - curr_node > 2)
+        # new information comes in!
+        println("New information [", gen_prob, "]")
+        # generate the node index which is being affected
+        change_node_idx = rand_between(curr_node, length(cycle_idx))
+        # organise necessary input for remaining nodes
+        (new_N, new_c_pos, new_death, new_cost) = generate_new_input(curr_node, change_node_idx, N, cycle_idx, c_pos, death, cost)
+        # generate new tsp
+        cycle_idx = generate_tsp(new_N, new_c_pos, new_death, new_cost)
+        # assign new variables to old variables
+        c_pos = new_c_pos
+        death = new_death
+        cost = new_cost
+        N = new_N
+        # start from beginning of cycle
+        curr_node = 1
+    else
+        curr_node += 1
+    end
+end
