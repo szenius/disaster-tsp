@@ -211,7 +211,7 @@ while curr_node != length(cycle_idx)
         # new information comes in!
         println("New information [", gen_prob, "]")
         # generate the node index which is being affected
-        change_node_idx = rand_between(curr_node, length(cycle_idx))
+        change_node_idx = rand_between(curr_node + 1, length(cycle_idx))
         # organise necessary input for remaining nodes
         (new_N, new_c_pos, new_death, new_cost) = generate_new_input(curr_node, change_node_idx, N, cycle_idx, c_pos, death, cost)
         # generate new tsp
