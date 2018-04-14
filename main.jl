@@ -12,7 +12,6 @@ function generate_tsp(N, c_pos, death, cost)
     for i=1:N
         println(i, " : ", getvalue(tlapsed[i])*death[i], " [", getvalue(tlapsed[i]), "]")
     end
-    plot_tour(x, c_pos, N)
 
     # Subtour elimination
     tic()
@@ -47,8 +46,6 @@ function subtour_elimination(m, x, N)
         end
     end
 
-    println("cycle_idx: ", cycle_idx)
-    println("Length: ", length(cycle_idx))
     if length(cycle_idx) < N
         @constraint(m, sum(x[f=cycle_idx,t=cycle_idx]) <= length(cycle_idx)-1)
         return false, m
@@ -78,7 +75,7 @@ function plot_tour(x, c_pos, N)
     push!(a, c_pos[1][1])
     push!(b, c_pos[1][2])
 
-    plot!(a,b, marker=([:hex :d],6,0.4,stroke(2,:gray)), legend = false)
+    plot!(a,b, marker=([:hex :d],6,0.4,stroke(2,:gray)), legend = false, reuse = false)
     gui()
 
     return cycle_idx
@@ -162,14 +159,14 @@ end
 # HELPER FUNCTIONS
 #################
 
-# Multiplier to get new death for new information
-function get_death_multiplier()
-    return rand(2:5)
-end
-
 # Returns a random number between start_idx and end_idx
 function rand_between(start_idx, end_idx)
     return rand(start_idx:end_idx)
+end
+
+# Multiplier to get new death for new information
+function get_death_multiplier()
+    return rand_between(2, 5)
 end
 
 # Generate new input for new TSP problem
@@ -193,6 +190,13 @@ function generate_new_input(curr_node, change_node_idx, N, cycle_idx, c_pos, dea
     return (new_N, new_c_pos, new_death, new_cost)
 end
 
+# Print cycle lat long death based on cycle_idx
+function print_cycle(cycle_idx, c_pos, death)
+    for i=1:length(cycle_idx)
+        println(cycle_idx[i], " : ", c_pos[i][1], " ", c_pos[i][2], " : ", death[i])
+    end
+end
+
 plotly()
 
 # Read data file
@@ -201,11 +205,12 @@ println("Read in data file. There are ", N, " nodes.")
 
 # Generate first TSP based on input data
 cycle_idx = generate_tsp(N, c_pos, death, cost)
+print_cycle(cycle_idx, c_pos, death)
 
 # Traverse the TSP cycle
 curr_node = 1
 while curr_node != length(cycle_idx)
-    println("Reached node ", cycle_idx[curr_node])
+    println("Reached ", c_pos[cycle_idx[curr_node]][1], " : ", c_pos[cycle_idx[curr_node]][2])
     gen_prob = rand()
     if (gen_prob < new_info_prob && length(cycle_idx) - curr_node > 2)
         # new information comes in!
@@ -216,6 +221,7 @@ while curr_node != length(cycle_idx)
         (new_N, new_c_pos, new_death, new_cost) = generate_new_input(curr_node, change_node_idx, N, cycle_idx, c_pos, death, cost)
         # generate new tsp
         cycle_idx = generate_tsp(new_N, new_c_pos, new_death, new_cost)
+        print_cycle(cycle_idx, new_c_pos, new_death)
         # assign new variables to old variables
         c_pos = new_c_pos
         death = new_death
