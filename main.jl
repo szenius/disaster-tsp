@@ -1,9 +1,11 @@
 using JuMP, Gurobi, Distances, Plots
 
 debug = true
-debug_N = 10
+debug_N = 5
 
 new_info_prob = 1.0
+
+results_filename = string("./results", Dates.format(now(), "yymmddHHMM"), ".txt")
 
 function generate_tsp(N, c_pos, death, cost)
     # Solve initial assignment problem
@@ -190,13 +192,27 @@ function generate_new_input(curr_node, change_node_idx, N, cycle_idx, c_pos, dea
     return (new_N, new_c_pos, new_death, new_cost)
 end
 
-# Print cycle lat long death based on cycle_idx
-function print_cycle(cycle_idx, c_pos, death)
-    for i=1:length(cycle_idx)
-        println(cycle_idx[i], " : ", c_pos[i][1], " ", c_pos[i][2], " : ", death[i])
+# Print new TSP (each node's lat lon death) based to file
+function print_cycle(cycle_idx, c_pos, death, results_filename)
+    open(results_filename, "a") do f
+        write(f, "NEW TSP:\n")
+        for i=1:length(cycle_idx)
+            node_info = string(cycle_idx[i], " : ", c_pos[i][1], " ", c_pos[i][2], " : ", death[i], "\n")
+            write(f, node_info)
+        end
     end
 end
 
+# Print node lat lon death to file
+function print_node(cycle_idx, c_pos, curr_node, results_filename)
+    open(results_filename, "a") do f
+        node_info = string("Reached ", c_pos[cycle_idx[curr_node]][1], " : ", c_pos[cycle_idx[curr_node]][2], "\n")
+        write(f, node_info)
+    end
+end
+
+
+## MAIN CODE STARTS HERE
 plotly()
 
 # Read data file
@@ -205,12 +221,12 @@ println("Read in data file. There are ", N, " nodes.")
 
 # Generate first TSP based on input data
 cycle_idx = generate_tsp(N, c_pos, death, cost)
-print_cycle(cycle_idx, c_pos, death)
+print_cycle(cycle_idx, c_pos, death, results_filename)
 
 # Traverse the TSP cycle
 curr_node = 1
 while curr_node != length(cycle_idx)
-    println("Reached ", c_pos[cycle_idx[curr_node]][1], " : ", c_pos[cycle_idx[curr_node]][2])
+    print_node(cycle_idx, c_pos, curr_node, results_filename)
     gen_prob = rand()
     if (gen_prob < new_info_prob && length(cycle_idx) - curr_node > 2)
         # new information comes in!
@@ -221,7 +237,7 @@ while curr_node != length(cycle_idx)
         (new_N, new_c_pos, new_death, new_cost) = generate_new_input(curr_node, change_node_idx, N, cycle_idx, c_pos, death, cost)
         # generate new tsp
         cycle_idx = generate_tsp(new_N, new_c_pos, new_death, new_cost)
-        print_cycle(cycle_idx, new_c_pos, new_death)
+        print_cycle(cycle_idx, new_c_pos, new_death, results_filename)
         # assign new variables to old variables
         c_pos = new_c_pos
         death = new_death
@@ -233,3 +249,7 @@ while curr_node != length(cycle_idx)
         curr_node += 1
     end
 end
+
+# Print results_filename
+println("Your rescue mission is complete!")
+println("Results are written to ", results_filename)
