@@ -1,14 +1,14 @@
 using JuMP, Gurobi, Distances, Plots
 
 debug = true
-debug_N = 25
+debug_N = 5
 
-new_info_prob = 0.4
+new_info_prob = 1.0
 
 results_filename = string("./results", Dates.format(now(),
     "yymmddHHMM"), ".txt")
 
-function generate_tsp(N, c_pos, death, cost)
+function generate_tsp(N, c_pos, death, cost, results_filename)
     # Solve initial assignment problem
     (m, x, tlapsed) = solve_assignment(N, c_pos, death, cost)
     println("Solved initial assignment problem")
@@ -29,7 +29,11 @@ function generate_tsp(N, c_pos, death, cost)
     end
     toc()
     println("Objective value:", getobjectivevalue(m))
-    return plot_tour(x, c_pos, N)
+    open(results_filename, "a") do f
+        write(f, string("Generated TSP with objective value ",
+            getobjectivevalue(m), " [", count, "]\n"))
+    end
+    return getvalue(tlapsed), plot_tour(x, c_pos, N)
 end
 
 ##############################
@@ -205,12 +209,13 @@ function generate_new_input(curr_node, change_node_idx, N, name,
 end
 
 # Print new TSP (each node's lat lon death) based to file
-function print_cycle(cycle_idx, name, c_pos, death, results_filename)
+function print_cycle(cycle_idx, name, c_pos, death, tlapsed, results_filename)
     open(results_filename, "a") do f
         write(f, "#####################Start New TSP#####################\n")
         for i=1:length(cycle_idx)
-            node_info = string(name[i], " : ", c_pos[i][1], " : ", c_pos[i][2],
-                " : ", death[i], "\n")
+            node_info = string(name[cycle_idx[i]], " : ", c_pos[cycle_idx[i]][1],
+                " : ", c_pos[cycle_idx[i]][2], " : ", death[cycle_idx[i]], " : ",
+                tlapsed[cycle_idx[i]], "\n")
             write(f, node_info)
         end
         write(f, "#####################End New TSP#####################\n")
@@ -242,8 +247,8 @@ open(results_filename, "w") do f
 end
 
 # Generate first TSP based on input data
-cycle_idx = generate_tsp(N, c_pos, death, cost)
-print_cycle(cycle_idx, name, c_pos, death, results_filename)
+(tlapsed, cycle_idx) = generate_tsp(N, c_pos, death, cost, results_filename)
+print_cycle(cycle_idx, name, c_pos, death, tlapsed, results_filename)
 
 # Traverse the TSP cycle
 curr_node = 1
@@ -259,8 +264,8 @@ while curr_node != length(cycle_idx)
         (new_N, new_name, new_c_pos, new_death, new_cost) = generate_new_input(
             curr_node, change_node_idx, N, name, cycle_idx, c_pos, death, cost)
         # generate new tsp
-        cycle_idx = generate_tsp(new_N, new_c_pos, new_death, new_cost)
-        print_cycle(cycle_idx, name, new_c_pos, new_death, results_filename)
+        (tlapsed, cycle_idx) = generate_tsp(new_N, new_c_pos, new_death, new_cost, results_filename)
+        print_cycle(cycle_idx, name, new_c_pos, new_death, tlapsed, results_filename)
         # assign new variables to old variables
         c_pos = new_c_pos
         death = new_death
