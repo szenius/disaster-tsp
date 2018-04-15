@@ -1,9 +1,9 @@
 using JuMP, Gurobi, Distances, Plots
 
 debug = true
-debug_N = 5
+debug_N = 20
 
-new_info_prob = 1.0
+new_info_prob = 0.4
 
 results_filename = string("./results", Dates.format(now(),
     "yymmddHHMM"), ".txt")
