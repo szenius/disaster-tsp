@@ -1,3 +1,5 @@
+Run `main_death_var.jl`.
+
 # How it works
 1. Generate TSP based on input data file
 2. According to the generated TSP, the algo starts to traverse the graph, one node at a time.
