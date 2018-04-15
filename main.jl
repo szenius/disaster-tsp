@@ -140,12 +140,14 @@ function read_and_parse_data(filename)
     c_pos = [Vector{Float64}(2) for _ in 1:N]
     death = Array{Float64}(N)
     cost = Array{Float64}(N)
+    name = Array{String}(N)
 
     for i = 1:N
         n_str, x_str, y_str, d_str, c_str, p_str = split(lines[i])  # each line has no, x-coord, y-coord n the data file
         c_pos[i] = [parse(Float64, x_str), parse(Float64, y_str)]
         death[i] = parse(Float64, d_str) # rate of death (num of people/second)
         cost[i] = parse(Float64, c_str) # cost (in km^2) to comb for people in node i
+        name[i] = n_str
     end
 
     a = [c_pos[i][1] for i in 1:N]
@@ -154,7 +156,7 @@ function read_and_parse_data(filename)
     scatter(a,b, marker=([:hex :d],6,0.4,stroke(2,:gray)), legend = false)
     gui()
 
-    return N, c_pos, death, cost
+    return N, name, c_pos, death, cost
 end
 
 ##################
@@ -172,11 +174,12 @@ function get_death_multiplier()
 end
 
 # Generate new input for new TSP problem
-function generate_new_input(curr_node, change_node_idx, N, cycle_idx, c_pos, death, cost)
+function generate_new_input(curr_node, change_node_idx, N, name, cycle_idx, c_pos, death, cost)
     new_N = length(cycle_idx) - curr_node
     new_c_pos = [Vector{Float64}(2) for _ in 1:new_N]
     new_death = Array{Float64}(new_N)
     new_cost = Array{Float64}(new_N)
+    new_name = Array{String}(new_N)
     new_idx = 1
     for j=curr_node+1:N
         new_c_pos[new_idx][1] = c_pos[cycle_idx[j]][1]
@@ -187,26 +190,28 @@ function generate_new_input(curr_node, change_node_idx, N, cycle_idx, c_pos, dea
             new_death[new_idx] *= get_death_multiplier()
         end
         new_cost[new_idx] = cost[cycle_idx[j]]
+        new_name[new_idx] = name[cycle_idx[j]]
         new_idx += 1
     end
-    return (new_N, new_c_pos, new_death, new_cost)
+    return (new_N, new_name, new_c_pos, new_death, new_cost)
 end
 
 # Print new TSP (each node's lat lon death) based to file
-function print_cycle(cycle_idx, c_pos, death, results_filename)
+function print_cycle(cycle_idx, name, c_pos, death, results_filename)
     open(results_filename, "a") do f
-        write(f, "NEW TSP:\n")
+        write(f, "Start New TSP:\n")
         for i=1:length(cycle_idx)
-            node_info = string(cycle_idx[i], " : ", c_pos[i][1], " ", c_pos[i][2], " : ", death[i], "\n")
+            node_info = string(name[i], " : ", c_pos[i][1], " : ", c_pos[i][2], " : ", death[i], "\n")
             write(f, node_info)
         end
+        write(f, "End New TSP:\n")
     end
 end
 
 # Print node lat lon death to file
-function print_node(cycle_idx, c_pos, curr_node, results_filename)
+function print_node(node_idx, name, c_pos, results_filename)
     open(results_filename, "a") do f
-        node_info = string("Reached ", c_pos[cycle_idx[curr_node]][1], " : ", c_pos[cycle_idx[curr_node]][2], "\n")
+        node_info = string("Reached ", name[node_idx] , " : ", c_pos[node_idx][1], " : ", c_pos[node_idx][2], "\n")
         write(f, node_info)
     end
 end
@@ -216,17 +221,22 @@ end
 plotly()
 
 # Read data file
-(N, c_pos, death, cost) = read_and_parse_data("C:/Users/SZEYING/LocationFinal2.txt")
+(N, name, c_pos, death, cost) = read_and_parse_data("C:/Users/SZEYING/LocationFinal2.txt")
 println("Read in data file. There are ", N, " nodes.")
+
+open(results_filename, "w") do f
+    write(f, string("Starting disaster optimisation for ", N, " nodes\n"))
+    write(f, string("New information comes in with probability ", new_info_prob, "\n"))
+end
 
 # Generate first TSP based on input data
 cycle_idx = generate_tsp(N, c_pos, death, cost)
-print_cycle(cycle_idx, c_pos, death, results_filename)
+print_cycle(cycle_idx, name, c_pos, death, results_filename)
 
 # Traverse the TSP cycle
 curr_node = 1
 while curr_node != length(cycle_idx)
-    print_node(cycle_idx, c_pos, curr_node, results_filename)
+    print_node(cycle_idx[curr_node], name, c_pos, results_filename)
     gen_prob = rand()
     if (gen_prob < new_info_prob && length(cycle_idx) - curr_node > 2)
         # new information comes in!
@@ -234,10 +244,10 @@ while curr_node != length(cycle_idx)
         # generate the node index which is being affected
         change_node_idx = rand_between(curr_node + 1, length(cycle_idx))
         # organise necessary input for remaining nodes
-        (new_N, new_c_pos, new_death, new_cost) = generate_new_input(curr_node, change_node_idx, N, cycle_idx, c_pos, death, cost)
+        (new_N, new_name, new_c_pos, new_death, new_cost) = generate_new_input(curr_node, change_node_idx, N, name, cycle_idx, c_pos, death, cost)
         # generate new tsp
         cycle_idx = generate_tsp(new_N, new_c_pos, new_death, new_cost)
-        print_cycle(cycle_idx, new_c_pos, new_death, results_filename)
+        print_cycle(cycle_idx, name, new_c_pos, new_death, results_filename)
         # assign new variables to old variables
         c_pos = new_c_pos
         death = new_death
