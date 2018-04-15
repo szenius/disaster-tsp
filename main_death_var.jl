@@ -186,7 +186,7 @@ end
 
 # Generate new input for new TSP problem
 function generate_new_input(curr_node, change_node_idx, N, name,
-        cycle_idx, c_pos, death, cost, ppl)
+        cycle_idx, c_pos, death, cost, ppl, results_filename)
     new_N = length(cycle_idx) - curr_node + 1
     new_c_pos = [Vector{Float64}(2) for _ in 1:new_N]
     new_death = Array{Float64}(new_N)
@@ -201,6 +201,11 @@ function generate_new_input(curr_node, change_node_idx, N, name,
         # change death rate of chosen node by random percentage
         if j == change_node_idx
             new_death[new_idx] *= get_death_multiplier()
+            # write the changed node to file
+            open(results_filename, "a") do f
+                write(f, string("New info at ", name[cycle_idx[change_node_idx]],
+                    ": ", death[cycle_idx[j]], " to ", new_death[new_idx], "\n"))
+            end
         end
         new_cost[new_idx] = cost[cycle_idx[j]]
         new_name[new_idx] = name[cycle_idx[j]]
@@ -261,12 +266,11 @@ while curr_node <= length(cycle_idx)
     gen_prob = rand()
     if (gen_prob < new_info_prob && length(cycle_idx) - curr_node > 1)
         # new information comes in!
-        println("New information [", gen_prob, "]")
         # generate the node index which is being affected
         change_node_idx = rand_between(curr_node + 1, length(cycle_idx))
         # organise necessary input for remaining nodes
         (new_N, new_name, new_c_pos, new_death, new_cost, new_ppl) = generate_new_input(
-            curr_node, change_node_idx, N, name, cycle_idx, c_pos, death, cost, ppl)
+            curr_node, change_node_idx, N, name, cycle_idx, c_pos, death, cost, ppl, results_filename)
         # generate new tsp
         (tlapsed, cycle_idx, dead) = generate_tsp(new_N, new_c_pos, new_death,
             new_cost, new_ppl, tlapsed[cycle_idx[curr_node]], results_filename)
