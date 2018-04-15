@@ -1,9 +1,9 @@
 using JuMP, Gurobi, Distances, Plots
 
 debug = true
-debug_N = 20
+debug_N = 25
 
-new_info_prob = 1.0
+new_info_prob = 0.4
 
 results_filename = string("./results", Dates.format(now(),
     "yymmddHHMM"), ".txt")
@@ -265,6 +265,7 @@ while curr_node != length(cycle_idx)
         c_pos = new_c_pos
         death = new_death
         cost = new_cost
+        name = new_name
         N = new_N
         # start from beginning of cycle
         curr_node = 1
