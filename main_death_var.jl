@@ -6,9 +6,9 @@ new_info_prob = 1.0
 results_filename = string("./results", Dates.format(now(),
     "yymmddHHMM"), ".txt")
 
-function generate_tsp(N, c_pos, death, cost, ppl, results_filename)
+function generate_tsp(N, c_pos, death, cost, ppl, curr_tlapsed, results_filename)
     # Solve initial assignment problem
-    (m, x, tlapsed, dead) = solve_assignment(N, c_pos, death, cost, ppl)
+    (m, x, tlapsed, dead) = solve_assignment(N, c_pos, death, cost, ppl, curr_tlapsed)
     println("Solved initial assignment problem")
 
     # Subtour elimination
@@ -88,7 +88,7 @@ end
 ##############################
 # Find solution for assignment problem
 ##############################
-function solve_assignment(N, c_pos, death, cost, ppl)
+function solve_assignment(N, c_pos, death, cost, ppl, curr_tlapsed)
     # constants
     M = 10000000 # large constant
 
@@ -107,7 +107,8 @@ function solve_assignment(N, c_pos, death, cost, ppl)
     @constraint(m, notself[i=1:N], x[f=i,t=i] == 0) # cannot go from node i to node i
     @constraint(m, oneout[i=1:N], sum(x[f=i,t=1:N]) == 1) # from node i, can only go to 1 other node
     @constraint(m, onein[j=1:N], sum(x[f=1:N,t=j]) == 1) # only 1 other node coming to node j
-    @constraint(m, tlapsed[1] == 0) # time lapsed at node 1 (start) is 0
+
+    @constraint(m, tlapsed[1] == curr_tlapsed) # set start node tlapsed to current time lapsed
 
     for f=1:N
         @constraint(m, dead[f] >= death[f]*tlapsed[f]) # deaths must be more than death rate * time lapsed
@@ -186,14 +187,14 @@ end
 # Generate new input for new TSP problem
 function generate_new_input(curr_node, change_node_idx, N, name,
         cycle_idx, c_pos, death, cost, ppl)
-    new_N = length(cycle_idx) - curr_node
+    new_N = length(cycle_idx) - curr_node + 1
     new_c_pos = [Vector{Float64}(2) for _ in 1:new_N]
     new_death = Array{Float64}(new_N)
     new_cost = Array{Float64}(new_N)
     new_name = Array{String}(new_N)
     new_ppl = Array{Int64}(new_N)
     new_idx = 1
-    for j=curr_node+1:N
+    for j=curr_node:N
         new_c_pos[new_idx][1] = c_pos[cycle_idx[j]][1]
         new_c_pos[new_idx][2] = c_pos[cycle_idx[j]][2]
         new_death[new_idx] = death[cycle_idx[j]]
@@ -224,11 +225,12 @@ function print_cycle(cycle_idx, name, c_pos, death, tlapsed, dead, results_filen
 end
 
 # Print node lat lon death to file
-function print_node(node_idx, name, c_pos, dead, results_filename)
+function print_node(node_idx, name, c_pos, death, tlapsed, dead, results_filename)
     open(results_filename, "a") do f
         node_info = string("Reached ", name[node_idx] , " : ",
             c_pos[node_idx][1], " : ", c_pos[node_idx][2],
-            " : ", dead[node_idx], "\n")
+            " : ", death[node_idx], " : ", tlapsed[node_idx], " : ",
+            dead[node_idx], "\n")
         write(f, node_info)
     end
 end
@@ -249,15 +251,15 @@ open(results_filename, "w") do f
 end
 
 # Generate first TSP based on input data
-(tlapsed, cycle_idx, dead) = generate_tsp(N, c_pos, death, cost, ppl, results_filename)
+(tlapsed, cycle_idx, dead) = generate_tsp(N, c_pos, death, cost, ppl, 0, results_filename)
 print_cycle(cycle_idx, name, c_pos, death, tlapsed, dead, results_filename)
 
 # Traverse the TSP cycle
 curr_node = 1
-while curr_node != length(cycle_idx)
-    print_node(cycle_idx[curr_node], name, c_pos, dead, results_filename)
+while curr_node <= length(cycle_idx)
+    print_node(cycle_idx[curr_node], name, c_pos, death, tlapsed, dead, results_filename)
     gen_prob = rand()
-    if (gen_prob < new_info_prob && length(cycle_idx) - curr_node > 2)
+    if (gen_prob < new_info_prob && length(cycle_idx) - curr_node > 1)
         # new information comes in!
         println("New information [", gen_prob, "]")
         # generate the node index which is being affected
@@ -267,7 +269,7 @@ while curr_node != length(cycle_idx)
             curr_node, change_node_idx, N, name, cycle_idx, c_pos, death, cost, ppl)
         # generate new tsp
         (tlapsed, cycle_idx, dead) = generate_tsp(new_N, new_c_pos, new_death,
-            new_cost, new_ppl, results_filename)
+            new_cost, new_ppl, tlapsed[cycle_idx[curr_node]], results_filename)
         print_cycle(cycle_idx, new_name, new_c_pos, new_death, tlapsed,
             dead, results_filename)
         # assign new variables to old variables
@@ -277,8 +279,8 @@ while curr_node != length(cycle_idx)
         name = new_name
         ppl = new_ppl
         N = new_N
-        # start from beginning of cycle
-        curr_node = 1
+        # start from the node after start node, which is curr node
+        curr_node = 2
     else
         curr_node += 1
     end
