@@ -1,7 +1,7 @@
 using JuMP, Gurobi, Distances, Plots
 
 debug = true
-debug_N = 10
+debug_N = 5
 new_info_prob = 1.0
 results_filename = string("./results", Dates.format(now(),
     "yymmddHHMM"), ".txt")
@@ -102,7 +102,7 @@ function solve_assignment(N, c_pos, death, cost, ppl)
     @variable(m, dead[k=1:N] >= 0) # dead[i] = total deaths at node i
     @variable(m, x[f=1:N,t=1:N], Bin) # x[i][j] is the arc from node i to node j
 
-    @objective(m, Min, sum(dead[i] for i=1:N))
+    @objective(m, Min, sum(dead[i] for i=1:N)) # min number of deaths
 
     @constraint(m, notself[i=1:N], x[f=i,t=i] == 0) # cannot go from node i to node i
     @constraint(m, oneout[i=1:N], sum(x[f=i,t=1:N]) == 1) # from node i, can only go to 1 other node
@@ -110,8 +110,8 @@ function solve_assignment(N, c_pos, death, cost, ppl)
     @constraint(m, tlapsed[1] == 0) # time lapsed at node 1 (start) is 0
 
     for f=1:N
-        @constraint(m, dead[f] >= death[f]*tlapsed[f])
-        @constraint(m, dead[f] <= ppl[f])
+        @constraint(m, dead[f] >= death[f]*tlapsed[f]) # deaths must be more than death rate * time lapsed
+        @constraint(m, dead[f] <= ppl[f]) # deaths must be less than total #ppl at each node
         for t=2:N
             @constraint(m, x[f,t]+x[t,f] <= 1) # disallow i --> j --> i loops
 
@@ -156,7 +156,7 @@ function read_and_parse_data(filename)
         c_pos[i] = [parse(Float64, x_str), parse(Float64, y_str)]
         death[i] = parse(Float64, d_str) # rate of death (num of people/second)
         cost[i] = parse(Float64, c_str) # cost (in km^2) to comb for people in node i
-        ppl[i] = parse(Int64, p_str)
+        ppl[i] = parse(Int64, p_str) # number of ppl at each node
         name[i] = n_str
     end
 
@@ -224,10 +224,11 @@ function print_cycle(cycle_idx, name, c_pos, death, tlapsed, dead, results_filen
 end
 
 # Print node lat lon death to file
-function print_node(node_idx, name, c_pos, results_filename)
+function print_node(node_idx, name, c_pos, dead, results_filename)
     open(results_filename, "a") do f
         node_info = string("Reached ", name[node_idx] , " : ",
-            c_pos[node_idx][1], " : ", c_pos[node_idx][2], "\n")
+            c_pos[node_idx][1], " : ", c_pos[node_idx][2],
+            " : ", dead[node_idx], "\n")
         write(f, node_info)
     end
 end
@@ -254,7 +255,7 @@ print_cycle(cycle_idx, name, c_pos, death, tlapsed, dead, results_filename)
 # Traverse the TSP cycle
 curr_node = 1
 while curr_node != length(cycle_idx)
-    print_node(cycle_idx[curr_node], name, c_pos, results_filename)
+    print_node(cycle_idx[curr_node], name, c_pos, dead, results_filename)
     gen_prob = rand()
     if (gen_prob < new_info_prob && length(cycle_idx) - curr_node > 2)
         # new information comes in!
@@ -265,8 +266,10 @@ while curr_node != length(cycle_idx)
         (new_N, new_name, new_c_pos, new_death, new_cost, new_ppl) = generate_new_input(
             curr_node, change_node_idx, N, name, cycle_idx, c_pos, death, cost, ppl)
         # generate new tsp
-        (tlapsed, cycle_idx, dead) = generate_tsp(new_N, new_c_pos, new_death, new_cost, new_ppl, results_filename)
-        print_cycle(cycle_idx, name, new_c_pos, new_death, tlapsed, dead, results_filename)
+        (tlapsed, cycle_idx, dead) = generate_tsp(new_N, new_c_pos, new_death,
+            new_cost, new_ppl, results_filename)
+        print_cycle(cycle_idx, new_name, new_c_pos, new_death, tlapsed,
+            dead, results_filename)
         # assign new variables to old variables
         c_pos = new_c_pos
         death = new_death
