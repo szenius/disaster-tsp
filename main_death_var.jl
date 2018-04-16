@@ -1,7 +1,7 @@
 using JuMP, Gurobi, Distances, Plots
 
 debug = true
-debug_N = 20
+debug_N = 5
 new_info_prob = 0
 results_filename = string("./results", Dates.format(now(),
     "yymmddHHMM"), ".txt")
@@ -123,7 +123,9 @@ function solve_assignment(N, c_pos, death, cost, ppl, curr_tlapsed)
             @constraint(m, tlapsed[t] - tlapsed[f] <= (cost[f]*speed2+
                 euclidean(c_pos[t],c_pos[f])*speed)*x[f,t] + M*(1-x[f,t]))
 
-            @constraint(m, subtour[i=f,j=1:t], sum(x[i,j]) <= t - 1) # subtour elimination
+            # subtour elimination
+            @expression(m, subtour, sum(x[f,j] for j=1:t))
+            @constraint(m, subtour <= t - 1)
         end
     end
 
