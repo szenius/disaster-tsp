@@ -2,7 +2,7 @@ using JuMP, Gurobi, Distances, Plots
 
 debug = true
 debug_N = 11
-new_info_prob = 0
+new_info_prob = 0.4
 results_filename = string("./results", Dates.format(now(),
     "yymmddHHMM"), ".txt")
 
@@ -99,7 +99,6 @@ function solve_opt(N, c_pos, death, cost, ppl, curr_tlapsed)
             @constraint(m, seq[f] - seq[t] + 1 <= N*(1 - x[f,t]))
         end
     end
-
 
     # solve
     tic()
