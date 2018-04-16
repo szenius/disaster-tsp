@@ -1,8 +1,8 @@
 using JuMP, Gurobi, Distances, Plots
 
 debug = true
-debug_N = 5
-new_info_prob = 1.0
+debug_N = 20
+new_info_prob = 0
 results_filename = string("./results", Dates.format(now(),
     "yymmddHHMM"), ".txt")
 
@@ -12,17 +12,17 @@ function generate_tsp(N, c_pos, death, cost, ppl, curr_tlapsed, results_filename
     println("Solved initial assignment problem")
 
     # Subtour elimination
-    tic()
-    count = 0
-    (isDone, m) = subtour_elimination(m, x, N)
-    while !isDone
-        status = solve(m)
-        count += 1
-        println("cut number: ", count)
-        (isDone, m) = subtour_elimination(m, x, N)
-    end
-    toc()
-    println("Objective value:", getobjectivevalue(m))
+    # tic()
+    # count = 0
+    # (isDone, m) = subtour_elimination(m, x, N)
+    # while !isDone
+    #     status = solve(m)
+    #     count += 1
+    #     println("cut number: ", count)
+    #     (isDone, m) = subtour_elimination(m, x, N)
+    # end
+    # toc()
+    # println("Objective value:", getobjectivevalue(m))
     open(results_filename, "a") do f
         write(f, string("Generated TSP with objective value ",
             getobjectivevalue(m), " [", count, "]\n"))
@@ -122,6 +122,8 @@ function solve_assignment(N, c_pos, death, cost, ppl, curr_tlapsed)
                 euclidean(c_pos[t],c_pos[f])*speed)*x[f,t] - M*(1-x[f,t]))
             @constraint(m, tlapsed[t] - tlapsed[f] <= (cost[f]*speed2+
                 euclidean(c_pos[t],c_pos[f])*speed)*x[f,t] + M*(1-x[f,t]))
+
+            @constraint(m, subtour[i=f,j=1:t], sum(x[i,j]) <= t - 1) # subtour elimination
         end
     end
 
