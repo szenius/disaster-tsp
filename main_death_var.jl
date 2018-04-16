@@ -239,7 +239,7 @@ curr_node = 1
 while curr_node <= length(cycle_idx)
     print_node(cycle_idx[curr_node], name, c_pos, death, tlapsed, dead, results_filename)
     gen_prob = rand()
-    if (gen_prob < new_info_prob && length(cycle_idx) - curr_node > 1)
+    if (gen_prob < new_info_prob && length(cycle_idx) - curr_node > 2)
         # new information comes in!
         # generate the node index which is being affected
         change_node_idx = rand_between(curr_node + 1, length(cycle_idx))
