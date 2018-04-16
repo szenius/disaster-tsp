@@ -1,58 +1,21 @@
 using JuMP, Gurobi, Distances, Plots
 
 debug = true
-debug_N = 5
+debug_N = 11
 new_info_prob = 0
 results_filename = string("./results", Dates.format(now(),
     "yymmddHHMM"), ".txt")
 
 function generate_tsp(N, c_pos, death, cost, ppl, curr_tlapsed, results_filename)
     # Solve initial assignment problem
-    (m, x, tlapsed, dead) = solve_assignment(N, c_pos, death, cost, ppl, curr_tlapsed)
-    println("Solved initial assignment problem")
+    (m, x, tlapsed, dead) = solve_opt(N, c_pos, death, cost, ppl, curr_tlapsed)
 
-    # Subtour elimination
-    # tic()
-    # count = 0
-    # (isDone, m) = subtour_elimination(m, x, N)
-    # while !isDone
-    #     status = solve(m)
-    #     count += 1
-    #     println("cut number: ", count)
-    #     (isDone, m) = subtour_elimination(m, x, N)
-    # end
-    # toc()
-    # println("Objective value:", getobjectivevalue(m))
+    # Write results into file
     open(results_filename, "a") do f
         write(f, string("Generated TSP with objective value ",
             getobjectivevalue(m), " [", count, "]\n"))
     end
     return getvalue(tlapsed), plot_tour(x, c_pos, N), getvalue(dead)
-end
-
-##############################
-# eliminate subtours
-##############################
-function subtour_elimination(m, x, N)
-    x_val = getvalue(x)    #initial solution
-
-    # find cycle
-    cycle_idx = Array{Int}(0)
-    push!(cycle_idx, 1)                  # tour starts at the first city
-    while true
-        v, idx = findmax(x_val[f=cycle_idx[end],t=1:N])
-        if idx == cycle_idx[1]
-            break
-        else
-            push!(cycle_idx,idx)
-        end
-    end
-
-    if length(cycle_idx) < N
-        @constraint(m, sum(x[f=cycle_idx,t=cycle_idx]) <= length(cycle_idx)-1)
-        return false, m
-    end
-    return true, m
 end
 
 ##############################
@@ -88,7 +51,7 @@ end
 ##############################
 # Find solution for assignment problem
 ##############################
-function solve_assignment(N, c_pos, death, cost, ppl, curr_tlapsed)
+function solve_opt(N, c_pos, death, cost, ppl, curr_tlapsed)
     # constants
     M = 10000000 # large constant
 
@@ -101,6 +64,7 @@ function solve_assignment(N, c_pos, death, cost, ppl, curr_tlapsed)
     @variable(m, tlapsed[k=1:N] >= 0) # tlapsed[i] = total time lapsed when team reaches node i
     @variable(m, dead[k=1:N] >= 0) # dead[i] = total deaths at node i
     @variable(m, x[f=1:N,t=1:N], Bin) # x[i][j] is the arc from node i to node j
+    @variable(m, 1 <= seq[k=1:N] <= N)
 
     @objective(m, Min, sum(dead[i] for i=1:N)) # min number of deaths
 
@@ -113,21 +77,29 @@ function solve_assignment(N, c_pos, death, cost, ppl, curr_tlapsed)
     for f=1:N
         @constraint(m, dead[f] >= death[f]*tlapsed[f]) # deaths must be more than death rate * time lapsed
         @constraint(m, dead[f] <= ppl[f]) # deaths must be less than total #ppl at each node
-        for t=2:N
-            @constraint(m, x[f,t]+x[t,f] <= 1) # disallow i --> j --> i loops
-
-            # tlapsed at node t - tlapsed at node f = time taken to comb node f
-            #               + time taken to travel from f to t IF we choose f--t
-            @constraint(m, tlapsed[t] - tlapsed[f] >= (cost[f]*speed2+
-                euclidean(c_pos[t],c_pos[f])*speed)*x[f,t] - M*(1-x[f,t]))
-            @constraint(m, tlapsed[t] - tlapsed[f] <= (cost[f]*speed2+
-                euclidean(c_pos[t],c_pos[f])*speed)*x[f,t] + M*(1-x[f,t]))
-
-            # subtour elimination
-            @expression(m, subtour, sum(x[f,j] for j=1:t))
-            @constraint(m, subtour <= t - 1)
+        for t=1:N
+            # avoid infeasible constraint where
+            # tlapsed(start) <= tlapsed(start + 1) <= ... <= tlapsed(end) <= tlapsed(start)
+            if (t > 1)
+                # tlapsed at node t - tlapsed at node f = time taken to comb node f
+                #               + time taken to travel from f to t IF we choose f--t
+                @constraint(m, tlapsed[t] - tlapsed[f] >= (cost[f]*speed2+
+                    euclidean(c_pos[t],c_pos[f])*speed)*x[f,t] - M*(1-x[f,t]))
+                @constraint(m, tlapsed[t] - tlapsed[f] <= (cost[f]*speed2+
+                    euclidean(c_pos[t],c_pos[f])*speed)*x[f,t] + M*(1-x[f,t]))
+            end
         end
     end
+
+    # MTZ formulation
+    @constraint(m, seq[1] == 1)
+    for f=2:N
+        @constraint(m, seq[f] >= 2)
+        for t=2:N
+            @constraint(m, seq[f] - seq[t] + 1 <= N*(1 - x[f,t]))
+        end
+    end
+
 
     # solve
     tic()
