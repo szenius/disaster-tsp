@@ -1,21 +1,29 @@
 using JuMP, Gurobi, Distances, Plots
 
 debug = true
-debug_N = 11
+debug_N = 12
 new_info_prob = 0.4
 results_filename = string("./results", Dates.format(now(),
     "yymmddHHMM"), ".txt")
+filename = "LocationFinal2.txt"
+tour_filename = "LocationN12.txt"
+tour_result_filename = "LocationN12_result.txt"
+tour_exists = true
 
-function generate_tsp(N, c_pos, death, cost, ppl, curr_tlapsed, results_filename)
-    # Solve initial assignment problem
-    (m, x, tlapsed, dead) = solve_opt(N, c_pos, death, cost, ppl, curr_tlapsed)
+function generate_tsp(N, c_pos, death, cost, ppl, curr_tlapsed)
+    if tour_exists
+        return read_and_parse_tour_data(N)
+    else
+        # Solve initial assignment problem
+        (m, x, tlapsed, dead) = solve_opt(N, c_pos, death, cost, ppl, curr_tlapsed)
 
-    # Write results into file
-    open(results_filename, "a") do f
-        write(f, string("Generated TSP with objective value ",
-            getobjectivevalue(m), " [", count, "]\n"))
+        # Write results into file
+        open(results_filename, "a") do f
+            write(f, string("Generated TSP with objective value ",
+                getobjectivevalue(m), " [", count, "]\n"))
+        end
+        return getvalue(tlapsed), plot_tour(x, c_pos, N), getvalue(dead)
     end
-    return getvalue(tlapsed), plot_tour(x, c_pos, N), getvalue(dead)
 end
 
 ##############################
@@ -108,10 +116,37 @@ function solve_opt(N, c_pos, death, cost, ppl, curr_tlapsed)
     return m, x, tlapsed, dead
 end
 
+######################################################
+# Read and parse results from existing tour
+######################################################
+function read_and_parse_tour_data(N)
+    f = open(tour_result_filename);
+    lines = readlines(f)
+    close(f)
+
+    tlapsed = Array{Float64}(N)
+    dead = Array{Float64}(N)
+
+    for i = 1:N
+        # each line has tlapsed, dead
+        tlapsed_str, dead_str = split(lines[i])
+        tlapsed[i] = parse(Float64, tlapsed_str)
+        dead[i] = parse(Float64, dead_str)
+    end
+
+    cycle_idx = Array{Int64}(N)
+
+    for i = 1:N
+        cycle_idx[i] = i
+    end
+
+    return tlapsed, cycle_idx, dead
+end
+
 ###########################
 # Read and parse input
 ###########################
-function read_and_parse_data(filename)
+function read_and_parse_data()
     f = open(filename);
     lines = readlines(f)
     N = length(lines)   #N= number of lines in the file. i.e., number of cities
@@ -161,7 +196,7 @@ end
 
 # Generate new input for new TSP problem
 function generate_new_input(curr_node, change_node_idx, N, name,
-        cycle_idx, c_pos, death, cost, ppl, results_filename)
+        cycle_idx, c_pos, death, cost, ppl)
     new_N = length(cycle_idx) - curr_node + 1
     new_c_pos = [Vector{Float64}(2) for _ in 1:new_N]
     new_death = Array{Float64}(new_N)
@@ -191,7 +226,7 @@ function generate_new_input(curr_node, change_node_idx, N, name,
 end
 
 # Print new TSP (each node's lat lon death) based to file
-function print_cycle(cycle_idx, name, c_pos, death, tlapsed, dead, results_filename)
+function print_cycle(cycle_idx, name, c_pos, death, tlapsed, dead)
     open(results_filename, "a") do f
         write(f, "#####################Start New TSP#####################\n")
         for i=1:length(cycle_idx)
@@ -205,7 +240,7 @@ function print_cycle(cycle_idx, name, c_pos, death, tlapsed, dead, results_filen
 end
 
 # Print node lat lon death to file
-function print_node(node_idx, name, c_pos, death, tlapsed, dead, results_filename)
+function print_node(node_idx, name, c_pos, death, tlapsed, dead)
     open(results_filename, "a") do f
         node_info = string("Reached ", name[node_idx] , " : ",
             c_pos[node_idx][1], " : ", c_pos[node_idx][2],
@@ -219,25 +254,32 @@ end
 ## MAIN CODE STARTS HERE
 plotly()
 
+if tour_exists
+    filename = tour_filename
+end
+
 # Read data file
-(N, name, c_pos, death, cost, ppl) = read_and_parse_data(
-    "C:/Users/SZEYING/LocationFinal2.txt")
+(N, name, c_pos, death, cost, ppl) = read_and_parse_data()
 println("Read in data file. There are ", N, " nodes.")
 
 open(results_filename, "w") do f
-    write(f, string("Starting disaster optimisation for ", N, " nodes\n"))
+    if tour_exists
+        write(f, string("Starting to traverse tour with ", N, " nodes\n"))
+    else
+        write(f, string("Starting disaster optimisation for ", N, " nodes\n"))
+    end
     write(f, string("New information comes in with probability ",
         new_info_prob, "\n"))
 end
 
 # Generate first TSP based on input data
-(tlapsed, cycle_idx, dead) = generate_tsp(N, c_pos, death, cost, ppl, 0, results_filename)
-print_cycle(cycle_idx, name, c_pos, death, tlapsed, dead, results_filename)
+(tlapsed, cycle_idx, dead) = generate_tsp(N, c_pos, death, cost, ppl, 0)
+print_cycle(cycle_idx, name, c_pos, death, tlapsed, dead)
 
 # Traverse the TSP cycle
 curr_node = 1
 while curr_node <= length(cycle_idx)
-    print_node(cycle_idx[curr_node], name, c_pos, death, tlapsed, dead, results_filename)
+    print_node(cycle_idx[curr_node], name, c_pos, death, tlapsed, dead)
     gen_prob = rand()
     if (gen_prob < new_info_prob && length(cycle_idx) - curr_node > 2)
         # new information comes in!
@@ -245,12 +287,11 @@ while curr_node <= length(cycle_idx)
         change_node_idx = rand_between(curr_node + 1, length(cycle_idx))
         # organise necessary input for remaining nodes
         (new_N, new_name, new_c_pos, new_death, new_cost, new_ppl) = generate_new_input(
-            curr_node, change_node_idx, N, name, cycle_idx, c_pos, death, cost, ppl, results_filename)
+            curr_node, change_node_idx, N, name, cycle_idx, c_pos, death, cost, ppl)
         # generate new tsp
         (tlapsed, cycle_idx, dead) = generate_tsp(new_N, new_c_pos, new_death,
-            new_cost, new_ppl, tlapsed[cycle_idx[curr_node]], results_filename)
-        print_cycle(cycle_idx, new_name, new_c_pos, new_death, tlapsed,
-            dead, results_filename)
+            new_cost, new_ppl, tlapsed[cycle_idx[curr_node]])
+        print_cycle(cycle_idx, new_name, new_c_pos, new_death, tlapsed, dead)
         # assign new variables to old variables
         c_pos = new_c_pos
         death = new_death
