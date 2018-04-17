@@ -1,17 +1,32 @@
 using JuMP, Gurobi, Distances, Plots
 
+# debug stuff
 debug = true
 debug_N = 12
+
+# p(new info coming in at each node)
 new_info_prob = 0.4
+
+# filenames
 results_filename = string("./results/results", Dates.format(now(),
     "yymmddHHMM"), ".txt")
 filename = "LocationFinal2.txt"
-tour_filename = "LocationN12.txt"
-tour_result_filename = "LocationN12_result.txt"
-tour_exists = true
 
+# parameters for saved tours
+tour_filename = "LocationN12.txt" # format is like data input file, except the
+                                  #    lines are in order of the generated tour
+tour_result_filename = "LocationN12_result.txt" # tlapsed dead from the saved tour
+tour_exists = true # true if you want to read from the two files above and
+                   #    skip the first tsp generation
+
+################################
+# generate a tsp, or if there is a saved tour, just read that
+# returns tlapsed, cycle_idx, dead
+################################
 function generate_tsp(N, c_pos, death, cost, ppl, curr_tlapsed, first_run)
     if tour_exists && first_run
+        # we have saved the tour for this N in a data file
+        # just read from this data file, don't need to generate tsp again
         return read_and_parse_tour_data(N)
     else
         # Solve initial assignment problem
@@ -28,6 +43,7 @@ end
 
 ##############################
 # plot tour
+# return cycle_idx
 ##############################
 function plot_tour(x, c_pos, N)
     x_final = getvalue(x)
@@ -57,7 +73,8 @@ end
 
 
 ##############################
-# Find solution for assignment problem
+# Create and solve TSP optimisation model
+# Returns m, x, tlapsed, dead
 ##############################
 function solve_opt(N, c_pos, death, cost, ppl, curr_tlapsed)
     # constants
@@ -118,6 +135,7 @@ end
 
 ######################################################
 # Read and parse results from existing tour
+# Return tlapsed, cycle_idx, dead
 ######################################################
 function read_and_parse_tour_data(N)
     f = open(tour_result_filename);
@@ -145,6 +163,7 @@ end
 
 ###########################
 # Read and parse input
+# return N, name, c_pos, death, cost, ppl
 ###########################
 function read_and_parse_data()
     f = open(filename);
@@ -251,9 +270,10 @@ function print_node(node_idx, name, c_pos, death, tlapsed, dead)
 end
 
 
-## MAIN CODE STARTS HERE
+## MAIN CODE STARTS HERE ##
 plotly()
 
+# we want to read a saved tour instead of generating it from input data file
 if tour_exists
     filename = tour_filename
 end
@@ -262,6 +282,7 @@ end
 (N, name, c_pos, death, cost, ppl) = read_and_parse_data()
 println("Read in data file. There are ", N, " nodes.")
 
+# write headers to file
 open(results_filename, "w") do f
     if tour_exists
         write(f, string("Starting to traverse tour with ", N, " nodes\n"))
