@@ -3,15 +3,15 @@ using JuMP, Gurobi, Distances, Plots
 debug = true
 debug_N = 12
 new_info_prob = 0.4
-results_filename = string("./results", Dates.format(now(),
+results_filename = string("./results/results", Dates.format(now(),
     "yymmddHHMM"), ".txt")
 filename = "LocationFinal2.txt"
 tour_filename = "LocationN12.txt"
 tour_result_filename = "LocationN12_result.txt"
 tour_exists = true
 
-function generate_tsp(N, c_pos, death, cost, ppl, curr_tlapsed)
-    if tour_exists && curr_tlapsed == 0
+function generate_tsp(N, c_pos, death, cost, ppl, curr_tlapsed, first_run)
+    if tour_exists && first_run
         return read_and_parse_tour_data(N)
     else
         # Solve initial assignment problem
@@ -273,7 +273,7 @@ open(results_filename, "w") do f
 end
 
 # Generate first TSP based on input data
-(tlapsed, cycle_idx, dead) = generate_tsp(N, c_pos, death, cost, ppl, 0)
+(tlapsed, cycle_idx, dead) = generate_tsp(N, c_pos, death, cost, ppl, 0, true)
 print_cycle(cycle_idx, name, c_pos, death, tlapsed, dead)
 
 # Traverse the TSP cycle
@@ -290,7 +290,7 @@ while curr_node <= length(cycle_idx)
             curr_node, change_node_idx, N, name, cycle_idx, c_pos, death, cost, ppl)
         # generate new tsp
         (tlapsed, cycle_idx, dead) = generate_tsp(new_N, new_c_pos, new_death,
-            new_cost, new_ppl, tlapsed[cycle_idx[curr_node]])
+            new_cost, new_ppl, tlapsed[cycle_idx[curr_node]], false)
         print_cycle(cycle_idx, new_name, new_c_pos, new_death, tlapsed, dead)
         # assign new variables to old variables
         c_pos = new_c_pos
