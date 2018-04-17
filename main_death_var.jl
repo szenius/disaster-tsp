@@ -11,7 +11,7 @@ tour_result_filename = "LocationN12_result.txt"
 tour_exists = true
 
 function generate_tsp(N, c_pos, death, cost, ppl, curr_tlapsed)
-    if tour_exists
+    if tour_exists && curr_tlapsed == 0
         return read_and_parse_tour_data(N)
     else
         # Solve initial assignment problem
